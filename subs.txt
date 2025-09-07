@@ -1,14 +1,1 @@
-whateverict.com
-www.whateverict.com
-_dmarc.atw.ltd
-bi.atw.ltd
-blog.atw.ltd
-contact.atw.ltd
-dev-screenon.atw.ltd
-edu.atw.ltd
-lms.atw.ltd
-mail-api.atw.ltd
-portal-screenon.atw.ltd
-screenon.atw.ltd
-www.atw.ltd
-www.blog.atw.ltd
+
