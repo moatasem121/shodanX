@@ -172,13 +172,13 @@ func saveCSVFallback(domain string, allSubs []string, outputPrefix string) error
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	
+	// Write CSV header
 	if err := writer.Write([]string{"Domain", "Subdomain"}); err != nil {
 		fmt.Printf("Error: Failed to write CSV header: %v\n", err)
 		return err
 	}
 
-	 
+	// Write subdomain data
 	for _, sub := range allSubs {
 		if err := writer.Write([]string{domain, sub}); err != nil {
 			fmt.Printf("Error: Failed to write CSV row: %v\n", err)
@@ -193,69 +193,84 @@ func saveCSVFallback(domain string, allSubs []string, outputPrefix string) error
 func main() {
 	apiKey := flag.String("apikey", "", "Shodan API key (required)")
 	output := flag.String("output", "", "Output file name (without extension)")
+
+	// Custom usage message
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [OPTIONS] <domain>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Example: %s --apikey YOUR_API_KEY --output results example.com\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Example: %s --apikey YOUR_API_KEY .mil\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nOptions:\n")
+		flag.PrintDefaults()
+	}
+
+	// Parse flags first
 	flag.Parse()
 
+	// Check if domain argument is provided
 	if len(flag.Args()) < 1 {
-		fmt.Println("Usage: go run shodanX.go <domain> --apikey <your_api_key> [--output filename]")
-		fmt.Println("Example: go run shodanX.go example.com --apikey YOUR_SHODAN_API_KEY --output results")
+		fmt.Println("Error: Domain argument is required!")
+		fmt.Println("Usage: go run shodanX.go --apikey <your_api_key> [--output filename] <domain>")
+		fmt.Println("Example: go run shodanX.go --apikey YOUR_SHODAN_API_KEY --output mil .mil")
 		os.Exit(1)
 	}
 
-	
+	// Validate API key is provided (after parsing)
 	if *apiKey == "" {
 		fmt.Println("Error: Shodan API key is required!")
-		fmt.Println("Usage: go run shodanX.go <domain> --apikey <your_api_key> [--output filename]")
-		fmt.Println("Example: go run shodanX.go example.com --apikey YOUR_SHODAN_API_KEY --output results")
+		fmt.Println("Usage: go run shodanX.go --apikey <your_api_key> [--output filename] <domain>")
+		fmt.Println("Example: go run shodanX.go --apikey YOUR_SHODAN_API_KEY --output mil .mil")
 		os.Exit(1)
 	}
 
 	domain := flag.Arg(0)
+	fmt.Printf("[*] Starting scan for domain: %s\n", domain)
+	fmt.Printf("[*] Using API key: %s...\n", (*apiKey)[:8]+"***") // Show first 8 chars for confirmation
 
 	queries := []string{
-		
+		// Basic hostname and SSL certificate queries
 		fmt.Sprintf("hostname:\"%s\"", domain),
 		fmt.Sprintf("ssl.cert.subject.cn:\"%s\"", domain),
 		fmt.Sprintf("ssl.cert.subject.an:\"%s\"", domain),
 		fmt.Sprintf("ssl.cert.issuer.cn:\"%s\"", domain),
 		fmt.Sprintf("ssl.cert.issuer.o:\"%s\"", domain),
-		
-		
+
+		// HTTP content queries
 		fmt.Sprintf("http.title:\"%s\"", domain),
 		fmt.Sprintf("http.html:\"%s\"", domain),
 		fmt.Sprintf("http.component:\"%s\"", domain),
-		
-		
+
+		// SSL Subject Alternative Names (SAN) - Critical for subdomains
 		fmt.Sprintf("ssl.cert.subject.alt_names:\"%s\"", domain),
 		fmt.Sprintf("ssl.cert.extensions.subject_alt_name:\"%s\"", domain),
-		
-		
+
+		// Server headers and metadata
 		fmt.Sprintf("http.server:\"%s\"", domain),
 		fmt.Sprintf("http.headers:\"%s\"", domain),
 		fmt.Sprintf("http.location:\"%s\"", domain),
-		
+
 		// Mail servers and email-related services
 		fmt.Sprintf("smtp.starttls.tls.certificate.parsed.subject.common_name:\"%s\"", domain),
 		fmt.Sprintf("smtp.starttls.tls.certificate.parsed.extensions.subject_alt_name.dns_names:\"%s\"", domain),
-		
-		
+
+		// FTP services
 		fmt.Sprintf("ftp.banner:\"%s\"", domain),
-		
-		s
+
+		// DNS-related queries
 		fmt.Sprintf("dns.txt:\"%s\"", domain),
 		fmt.Sprintf("dns.mx:\"%s\"", domain),
-		
-		
+
+		// Organization and ASN queries
 		fmt.Sprintf("org:\"%s\"", domain),
 		fmt.Sprintf("asn.description:\"%s\"", domain),
-		
-		
+
+		// Certificate transparency logs
 		fmt.Sprintf("ssl.cert.serial:\"%s\"", domain),
 		fmt.Sprintf("ssl.cert.fingerprint:\"%s\"", domain),
-		
-		
+
+		// Catch-all queries
 		fmt.Sprintf("all:\"%s\"", domain),
-		
-		
+
+		// Additional wildcard patterns for common subdomains
 		fmt.Sprintf("hostname:\"*.%s\"", domain),
 		fmt.Sprintf("ssl.cert.subject.cn:\"*.%s\"", domain),
 		fmt.Sprintf("ssl.cert.subject.alt_names:\"*.%s\"", domain),
@@ -269,7 +284,7 @@ func main() {
 		allSubs = append(allSubs, subs...)
 	}
 
-	
+	// Add DNS API results
 	dnsSubs := getDNSSubs(domain, *apiKey)
 	allSubs = append(allSubs, dnsSubs...)
 
@@ -281,7 +296,7 @@ func main() {
 		fmt.Println(s)
 	}
 
-	
+	// IMPROVED SAVING WITH ERROR HANDLING AND FALLBACK
 	if *output != "" {
 		if err := saveResults(domain, allSubs, queries, *output); err != nil {
 			fmt.Printf("Error: Failed to save results: %v\n", err)
