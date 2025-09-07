@@ -1,126 +1,178 @@
-# shodanX
+# ShodanX - Advanced Subdomain Discovery Tool
 
-A small Go command-line tool to collect hostnames/subdomains from Shodan for a target domain. It queries multiple Shodan endpoints (host/search and DNS API), extracts hostnames from responses (hostnames, SSL certificate fields, HTTP data), de-duplicates results, and can optionally verify DNS resolution.
-
----
+A powerful Go-based subdomain enumeration tool that leverages Shodan's extensive database to discover subdomains through multiple search vectors including SSL certificates, HTTP headers, DNS records, and more.
 
 ## Features
 
-* Run multiple Shodan queries that target certificate fields, hostnames, HTTP content, org, and general results.
-* Paginated requests for `host/search` (configurable pages).
-* Rate limiting and concurrency controls to avoid hitting API limits.
-* Robust JSON parsing of Shodan responses to extract hostnames and certificate SANs.
-* Optional DNS verification of discovered hostnames.
-* Save results to TXT and JSON files with metadata.
-
----
-
-## Requirements
-
-* Go 1.20+ installed (or a recent Go toolchain).
-* A valid Shodan API key.
-
----
+- **Multi-Vector Search**: Uses 20+ different Shodan search queries to maximize subdomain discovery
+- **SSL Certificate Analysis**: Extracts subdomains from SSL certificate Subject Alternative Names (SANs)
+- **DNS API Integration**: Utilizes Shodan's DNS API for additional subdomain discovery
+- **Multiple Output Formats**: Saves results in TXT, JSON, and CSV formats with automatic fallback
+- **Duplicate Removal**: Automatically removes duplicate subdomains from results
+- **Error Handling**: Robust error handling with graceful fallbacks
+- **Progress Tracking**: Real-time query progress and result counting
 
 ## Installation
 
-1. Clone or copy the repository files.
-2. Place `shodanX.go` in the project directory.
-3. Build:
+### Prerequisites
+- Go 1.16 or higher
+- Valid Shodan API key
 
+### Build from Source
 ```bash
-go build -o shodanX shodanX.go
+git clone <repository-url>
+cd shodanx
+go build -o shodanx shodanx.go
 ```
 
-Or run directly with `go run`.
-
----
+### Or Run Directly
+```bash
+go run shodanx.go [options] <domain>
+```
 
 ## Usage
 
-```
-shodanX -domain <domain> -apikey <YOUR_SHODAN_KEY> [flags]
-```
-
-### Flags
-
-* `-apikey` (string, required) – Shodan API key.
-* `-domain` (string, required) – Domain to search (e.g. `example.com`).
-* `-output` (string) – Output filename prefix (creates `.txt` and `.json`).
-* `-pages` (int, default: 2) – Max pages to fetch per query from `/shodan/host/search`.
-* `-concurrency` (int, default: 1) – Number of concurrent queries.
-* `-timeout` (int, default: 15) – HTTP client timeout in seconds.
-* `-rps` (int, default: 1) – Requests per second (rate limiting).
-* `-verify` (bool) – Verify hostnames with DNS lookups (slow).
-
----
-
-## Examples
-
-Basic (run and print results to stdout):
-
+### Basic Usage
 ```bash
-./shodanX -domain atw.ltd -apikey MROkuK8hcziWeWlKwj5xKlXyJCRpwht5
+./shodanx --apikey YOUR_SHODAN_API_KEY example.com
 ```
 
-Save results to files and increase pages:
-
+### With Output File
 ```bash
-./shodanX -domain atw.ltd -apikey <KEY> -output subs -pages 3
+./shodanx --apikey YOUR_SHODAN_API_KEY --output results example.com
 ```
 
-Use concurrency and higher request rate (only if your Shodan plan allows it):
+### Command Line Options
+- `--apikey`: Shodan API key (required)
+- `--output`: Output file prefix (optional, saves as .txt, .json, and .csv)
 
+### Examples
+
+**Scan a specific domain:**
 ```bash
-./shodanX -domain atw.ltd -apikey <KEY> -output subs -concurrency 2 -rps 2
+./shodanx --apikey abc123def456 --output tesla_results tesla.com
 ```
 
-Verify DNS resolution for discovered hostnames (may be slow):
-
+**Scan a TLD (Top Level Domain):**
 ```bash
-./shodanX -domain atw.ltd -apikey <KEY> -verify
+./shodanx --apikey abc123def456 --output mil_scan .mil
 ```
 
----
+**Scan without saving to file:**
+```bash
+./shodanx --apikey abc123def456 github.com
+```
 
-## Output
+## Search Queries
 
-If `-output <name>` is provided, two files are created:
+ShodanX uses multiple search vectors to maximize subdomain discovery:
 
-* `<name>.txt` — newline-separated hostnames.
-* `<name>.json` — JSON with metadata (`domain`, `total`, `queries_used`, `subdomains`, `generated_at`).
+### Certificate-Based Queries
+- SSL certificate common names
+- SSL certificate subject alternative names
+- SSL certificate issuer information
+- Certificate transparency logs
 
-If `-output` is not provided, results are printed to stdout.
+### HTTP-Based Queries
+- HTTP titles and HTML content
+- Server headers and components
+- HTTP location headers
+- HTTP metadata
 
----
+### Network Service Queries
+- SMTP/Mail server certificates
+- FTP service banners
+- DNS TXT and MX records
 
-## Notes & Tips
+### Organizational Queries
+- Organization names
+- ASN descriptions
+- Wildcard hostname patterns
 
-* **Rate limits:** Keep `-rps` low (1) unless you know your Shodan plan supports higher throughput. Exceeding rate limits may lead to errors or blocked requests.
-* **Pages:** Increasing `-pages` will attempt to fetch more pages of search results, but this increases API usage and runtime.
-* **Field variance:** Shodan responses vary across services and time. The tool parses multiple possible certificate and HTTP fields defensively, but it may not extract every possible host depending on response shape.
-* **DNS verification:** DNS lookups can filter to only resolvable hosts, but some valid hostnames (e.g., internal or ephemeral) may not resolve publicly and will be omitted if `-verify` is used.
+## Output Formats
 
----
+### TXT Format (Primary)
+Plain text file with one subdomain per line:
+```
+subdomain1.example.com
+subdomain2.example.com
+www.example.com
+```
+
+### JSON Format
+Structured JSON with metadata:
+```json
+{
+  "domain": "example.com",
+  "total": 25,
+  "queries_used": ["hostname:\"example.com\"", "..."],
+  "subdomains": ["sub1.example.com", "sub2.example.com"]
+}
+```
+
+### CSV Format (Fallback)
+CSV format with domain and subdomain columns:
+```csv
+Domain,Subdomain
+example.com,sub1.example.com
+example.com,sub2.example.com
+```
+
+## Error Handling
+
+- **Graceful Fallbacks**: If JSON saving fails, automatically falls back to CSV
+- **Directory Creation**: Automatically creates output directories if they don't exist
+- **Network Resilience**: Handles API request failures gracefully
+- **Input Validation**: Validates required parameters before execution
+
+## API Rate Limits
+
+- Respects Shodan API rate limits
+- Uses efficient query batching
+- Displays API key confirmation (first 8 characters) for verification
+
+## Security Considerations
+
+- API keys are masked in output (only first 8 characters shown)
+- No sensitive data is logged to files
+- Safe file handling with proper permissions
 
 ## Troubleshooting
 
-* **Permission errors building/running:** Ensure Go is installed and you have execution permissions. Use `chmod +x shodanX` after building to make it executable.
-* **HTTP errors / non-200 responses:** Check your API key and Shodan account limits. The tool prints response details to stderr for debugging.
-* **Slow runs:** Lower `-pages`, reduce `-verify`, or increase `-rps` conservatively.
+### Common Issues
 
----
+**"Error: Shodan API key is required!"**
+- Ensure you provide the `--apikey` parameter
+- Verify your API key is valid
+
+**"Request failed" errors**
+- Check your internet connection
+- Verify your Shodan API key has sufficient credits
+- Ensure you haven't exceeded rate limits
+
+**"Failed to save" errors**
+- Check write permissions in the output directory
+- Ensure sufficient disk space
+- Tool will automatically fallback to alternative formats
+
+### Getting a Shodan API Key
+
+1. Visit [shodan.io](https://shodan.io)
+2. Create an account
+3. Navigate to your account page
+4. Copy your API key from the dashboard
 
 ## Contributing
 
-Contributions are welcome. Suggestions:
-
-* Add `crt.sh` and `Censys` aggregation and dedupe.
-* Add output formats (CSV) or integrations (Amass, Subfinder).
-* Replace manual parsing with typed structs for stricter JSON handling.
-
-If you want, open an issue or PR with proposed changes.
+Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
 
 
 
+## Disclaimer
 
+This tool is for educational and authorized security testing purposes only. Users are responsible for complying with all applicable laws and regulations. Only test against domains you own or have explicit permission to test.
+
+
+---
+
+**Note**: This tool requires a valid Shodan API key and sufficient API credits. Free Shodan accounts have limited query capabilities.
